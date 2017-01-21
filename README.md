@@ -7,3 +7,12 @@ Write this in the ipython cell to activate logging:
 %load_ext notebook_log
 %register_logging ~/log_file.txt
 ```
+
+To activate the extension on startup add this to your ipython profile file
+(by default it's located at ~/.ipython/profile_default/ipython_config.py)
+
+```python
+c.InteractiveShellApp.extensions = [
+    'notebook_log'
+]
+```
