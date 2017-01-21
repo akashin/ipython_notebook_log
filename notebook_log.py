@@ -5,8 +5,27 @@ import os
 _ORIGINAL_STDOUT = sys.stdout
 _ORIGINAL_STDERR = sys.stderr
 
+
+def save_data(ip, key, value):
+    if "kv_storage" not in dir(ip):
+        ip.kv_storage = {}
+    ip.kv_storage[key] = value
+
+
+def get_data(ip, key):
+    if "kv_storage" not in dir(ip):
+        return None
+    return ip.kv_storage.get(key, None)
+
+
 def register_logging(self, line):
     ip = self.shell
+
+    logging_started = get_data(ip, "logging_started")
+    if logging_started:
+        print(" Logging is already active")
+        return
+
     from time import strftime
     import os.path
     fname = os.path.basename(line)
@@ -14,8 +33,8 @@ def register_logging(self, line):
     notnew = os.path.exists(filename)
 
     try:
-        ip.magic('logstart -o %s append' % filename)
         capture_print(filename)
+        ip.magic('logstart -o %s append' % filename)
         if notnew:
             ip.logger.log_write(u"# =================================\n")
         else:
@@ -24,13 +43,17 @@ def register_logging(self, line):
             ip.logger.log_write(u"# IPython automatic logging file\n")
         ip.logger.log_write(u"# " + strftime('%H:%M:%S') + "\n")
         ip.logger.log_write(u"# =================================\n")
+
+        output_framer = OutputFramer(ip)
+        ip.events.register('pre_execute', output_framer.pre_execute)
+        ip.events.register('post_execute', output_framer.post_execute)
+        save_data(ip, "output_framer", output_framer)
+
+        save_data(ip, "logging_started", True)
+
         print(" Logging to " + filename)
     except RuntimeError:
         print(" Already logging to " + ip.logger.logfname)
-
-    output_framer = OutputFramer(ip)
-    ip.events.register('pre_execute', output_framer.pre_execute)
-    ip.events.register('post_execute', output_framer.post_execute)
 
 
 class OutputFramer(object):
@@ -54,12 +77,14 @@ def load_ipython_extension(ip):
 
 
 def unload_ipython_extension(ip):
-    # If you want your extension to be unloadable, put that logic here.
-    # ip.events.unregister('pre_execute', output_framer.pre_execute)
-    # ip.events.unregister('post_execute', output_framer.post_execute)
     stop_capturing_print()
     ip.magic('logstop')
-
+    output_framer = get_data(ip, "output_framer")
+    if output_framer is not None:
+        ip.events.unregister('pre_execute', output_framer.pre_execute)
+        ip.events.unregister('post_execute', output_framer.post_execute)
+        save_data(ip, "output_framer", None)
+    save_data(ip, "logging_started", False)
 
 class CaptureStdOut(object):
     """
