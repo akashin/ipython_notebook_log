@@ -8,7 +8,8 @@ When you execute the cell, it's content and everything it prints will get printe
 
 To activate logging you first need to download the notebook_log.py file and put it into .ipython/extensions folder:
 ```bash
-curl https://raw.githubusercontent.com/akashin/ipython_notebook_log/master/notebook_log.py > ~/.ipython/extensions/notebook_log.py
+curl https://raw.githubusercontent.com/akashin/ipython_notebook_log/master/notebook_log.py \
+    > ~/.ipython/extensions/notebook_log.py
 ```
 
 Then, write this in the ipython cell of your notebook to activate logging:
