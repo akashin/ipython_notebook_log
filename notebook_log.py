@@ -1,6 +1,9 @@
 import sys
-from io import StringIO
 import os
+
+from io import StringIO
+
+from IPython.core.magic import (Magics, magics_class, line_magic)
 
 _ORIGINAL_STDOUT = sys.stdout
 _ORIGINAL_STDERR = sys.stderr
@@ -18,42 +21,47 @@ def get_data(ip, key):
     return ip.kv_storage.get(key, None)
 
 
-def register_logging(self, line):
-    ip = self.shell
+@magics_class
+class LoggingMagics(Magics):
+    @line_magic
+    def register_logging(self, line):
+        ip = self.shell
 
-    logging_started = get_data(ip, "logging_started")
-    if logging_started:
-        print(" Logging is already active")
-        return
+        logging_started = get_data(ip, "logging_started")
+        if logging_started:
+            print(" Logging is already active")
+            return
 
-    from time import strftime
-    import os.path
-    fname = os.path.basename(line)
-    filename = line
-    notnew = os.path.exists(filename)
+        from time import strftime
+        import os.path
+        filepath = line
+        if filepath.startswith("~"):
+            filepath = os.path.expanduser(filepath)
+        filename = os.path.basename(filepath)
+        notnew = os.path.exists(filepath)
 
-    try:
-        capture_print(filename)
-        ip.magic('logstart -o %s append' % filename)
-        if notnew:
+        try:
+            capture_print(filepath)
+            ip.magic('logstart -o %s append' % filepath)
+            if notnew:
+                ip.logger.log_write(u"# =================================\n")
+            else:
+                ip.logger.log_write(u"#!/usr/bin/env python\n")
+                ip.logger.log_write(u"# " + filename + "\n")
+                ip.logger.log_write(u"# IPython automatic logging file\n")
+            ip.logger.log_write(u"# " + strftime('%H:%M:%S') + "\n")
             ip.logger.log_write(u"# =================================\n")
-        else:
-            ip.logger.log_write(u"#!/usr/bin/env python\n")
-            ip.logger.log_write(u"# " + fname + "\n")
-            ip.logger.log_write(u"# IPython automatic logging file\n")
-        ip.logger.log_write(u"# " + strftime('%H:%M:%S') + "\n")
-        ip.logger.log_write(u"# =================================\n")
 
-        output_framer = OutputFramer(ip)
-        ip.events.register('pre_execute', output_framer.pre_execute)
-        ip.events.register('post_execute', output_framer.post_execute)
-        save_data(ip, "output_framer", output_framer)
+            output_framer = OutputFramer(ip)
+            ip.events.register('pre_execute', output_framer.pre_execute)
+            ip.events.register('post_execute', output_framer.post_execute)
+            save_data(ip, "output_framer", output_framer)
 
-        save_data(ip, "logging_started", True)
+            save_data(ip, "logging_started", True)
 
-        print(" Logging to " + filename)
-    except RuntimeError:
-        print(" Already logging to " + ip.logger.logfname)
+            print(" Logging to " + filepath)
+        except RuntimeError:
+            print(" Already logging to " + ip.logger.logfname)
 
 
 class OutputFramer(object):
@@ -73,7 +81,7 @@ def load_ipython_extension(ip):
     # The `ipython` argument is the currently active `InteractiveShell`
     # instance, which can be used in any way. This allows you to register
     # new magics or aliases, for example.
-    ip.define_magic("register_logging", register_logging)
+    ip.register_magics(LoggingMagics)
 
 
 def unload_ipython_extension(ip):
@@ -99,8 +107,9 @@ class CaptureStdOut(object):
         """
         self._print_to_console = print_to_console
         if log_file_path is not None:
-            if not os.path.exists(os.path.dirname(log_file_path)):
-                os.makedirs(os.path.dirname(log_file_path))
+            dirpath = os.path.dirname(log_file_path)
+            if not os.path.exists(dirpath):
+                os.makedirs(dirpath)
             self.log = open(log_file_path, 'a')
         else:
             self.log = StringIO()
